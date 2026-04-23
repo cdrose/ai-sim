@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI-Sim</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      display: flex;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', sans-serif;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #sim-canvas { display: block; flex-shrink: 0; }
+    #sidebar {
+      width: 260px;
+      min-width: 260px;
+      background: #16213e;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow-y: auto;
+      border-left: 2px solid #0f3460;
+    }
+    h2 { color: #4fc3f7; font-size: 1.1rem; border-bottom: 1px solid #0f3460; padding-bottom: 4px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tool-btn {
+      padding: 5px 8px;
+      background: #0f3460;
+      border: 1px solid #4fc3f7;
+      color: #e0e0e0;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .tool-btn:hover { background: #1a4a80; }
+    .tool-btn.active { background: #4fc3f7; color: #1a1a2e; }
+    .tool-btn.danger-btn { border-color: #ff7043; }
+    .tool-btn.danger-btn.active { background: #ff7043; }
+    label { display: flex; flex-direction: column; gap: 3px; font-size: 0.8rem; color: #aaa; }
+    label strong, label span { color: #e0e0e0; }
+    input[type=range] { width: 100%; accent-color: #4fc3f7; }
+    .stat { font-size: 0.82rem; padding: 2px 0; }
+    .stat strong { color: #4fc3f7; }
+    #controls { display: flex; flex-direction: column; gap: 8px; }
+  </style>
+  <script type="module" crossorigin src="/ai-sim/assets/index-COOkFdpt.js"></script>
+</head>
+<body>
+  <canvas id="sim-canvas"></canvas>
+  <div id="sidebar">
+    <h2>🧠 AI-Sim</h2>
+
+    <div>
+      <h2>Tools</h2>
+      <div class="toolbar">
+        <button class="tool-btn active" data-tool="food">🌱 Food</button>
+        <button class="tool-btn" data-tool="erase">🧹 Erase</button>
+        <button class="tool-btn" data-tool="grass">🟩 Grass</button>
+        <button class="tool-btn" data-tool="water">🟦 Water</button>
+        <button class="tool-btn danger-btn" data-tool="danger">🟥 Danger</button>
+        <button class="tool-btn" data-tool="spawnHerb">🌿 +Herb</button>
+        <button class="tool-btn" data-tool="spawnPred">🦊 +Pred</button>
+        <button class="tool-btn danger-btn" data-tool="clear">💀 Clear</button>
+      </div>
+    </div>
+
+    <div>
+      <h2>Controls</h2>
+      <div id="controls"></div>
+    </div>
+
+    <div>
+      <h2>Stats</h2>
+      <div id="hud"></div>
+    </div>
+  </div>
+
+</body>
+</html>
