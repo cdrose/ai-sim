@@ -9,6 +9,11 @@ export class ReplayBuffer {
     if (this.buffer.length < this.maxSize) {
       this.buffer.push(experience);
     } else {
+      const evicted = this.buffer[this.index % this.maxSize];
+      if (evicted) {
+        evicted.state?.dispose();
+        evicted.nextState?.dispose();
+      }
       this.buffer[this.index % this.maxSize] = experience;
     }
     this.index++;
@@ -30,6 +35,8 @@ export class ReplayBuffer {
   setMaxSize(newMax) {
     this.maxSize = newMax;
     if (this.buffer.length > newMax) {
+      const evicted = this.buffer.slice(0, this.buffer.length - newMax);
+      evicted.forEach(e => { e.state?.dispose(); e.nextState?.dispose(); });
       this.buffer = this.buffer.slice(-newMax);
     }
   }

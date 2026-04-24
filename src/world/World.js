@@ -34,10 +34,10 @@ export class World {
       this._placeBlob(TileType.DANGER, 15);
     }
 
-    // Scatter food on 15% of GRASS tiles
+    // Scatter food on 4% of GRASS tiles — sparse enough to force herbivores to roam
     for (let tx = 0; tx < this.gridW; tx++) {
       for (let ty = 0; ty < this.gridH; ty++) {
-        if (this.tiles[tx][ty].type === TileType.GRASS && Math.random() < 0.15) {
+        if (this.tiles[tx][ty].type === TileType.GRASS && Math.random() < 0.04) {
           this.addFood(tx, ty);
         }
       }
@@ -57,8 +57,8 @@ export class World {
   }
 
   step(dt) {
-    // Regrow food on food sources
-    const foodThreshold = 5;
+    // Regrow food on food sources — 15s cooldown keeps food scarce
+    const foodThreshold = 15;
     for (const key of this.foodSources) {
       const [tx, ty] = key.split(',').map(Number);
       const tile = this.getTile(tx, ty);

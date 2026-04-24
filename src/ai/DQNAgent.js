@@ -22,6 +22,10 @@ export class DQNAgent {
     if (Math.random() < this.epsilon) {
       return Math.floor(Math.random() * this.numActions);
     }
+    return this.getGreedyAction(stateTensor);
+  }
+
+  getGreedyAction(stateTensor) {
     return tf.tidy(() => {
       const qValues = this.brain.predict(stateTensor);
       return qValues.argMax(1).dataSync()[0];
@@ -29,7 +33,14 @@ export class DQNAgent {
   }
 
   remember(state, action, reward, nextState, done) {
-    this.buffer.push({ state, action, reward, nextState, done });
+    // Clone tensors so the buffer owns its own copies — caller may dispose theirs
+    this.buffer.push({
+      state: state.clone(),
+      action,
+      reward,
+      nextState: nextState.clone(),
+      done
+    });
   }
 
   async trainStep() {
