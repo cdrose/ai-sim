@@ -126,22 +126,25 @@ export class World {
     return this.creatures.filter(c => c.alive && c.pos.distTo(origin) <= radius);
   }
 
-  getLocalGrid(cx, cy, gridSize) {
+  getLocalGrid(cx, cy, gridSize, numChannels = 5, options = {}) {
     const half = Math.floor(gridSize / 2);
-    const data = new Float32Array(gridSize * gridSize * 4);
+    const data = new Float32Array(gridSize * gridSize * numChannels);
 
     const centerTx = Math.floor(cx / this.tileSize);
     const centerTy = Math.floor(cy / this.tileSize);
+    const energyFraction = options.energyFraction !== undefined ? options.energyFraction : 1.0;
 
     for (let gy = 0; gy < gridSize; gy++) {
       for (let gx = 0; gx < gridSize; gx++) {
         const tx = centerTx + gx - half;
         const ty = centerTy + gy - half;
-        const base = (gy * gridSize + gx) * 4;
+        const base = (gy * gridSize + gx) * numChannels;
 
         const tile = this.getTile(tx, ty);
         if (!tile) {
           data[base + 0] = 1.0; // OOB = danger
+          // channels 1-4 remain 0
+          if (numChannels >= 5) data[base + 4] = energyFraction;
           continue;
         }
 
@@ -155,9 +158,35 @@ export class World {
         );
         data[base + 2] = creaturesOnTile.some(c => c.type === 'herbivore') ? 1.0 : 0.0;
         data[base + 3] = creaturesOnTile.some(c => c.type === 'predator') ? 1.0 : 0.0;
+
+        // Channel 4: hunger (uniform fill)
+        if (numChannels >= 5) data[base + 4] = energyFraction;
       }
     }
 
-    return tf.tensor4d(data, [1, gridSize, gridSize, 4]);
+    // Channel 5 (optional): prey radar gradient toward nearest herbivore
+    if (numChannels >= 6) {
+      const herbivores = this.creatures.filter(c => c.type === 'herbivore' && c.alive);
+      const radarRange = 300;
+      for (let gy = 0; gy < gridSize; gy++) {
+        for (let gx = 0; gx < gridSize; gx++) {
+          const tx = centerTx + gx - half;
+          const ty = centerTy + gy - half;
+          const cellWorldX = (tx + 0.5) * this.tileSize;
+          const cellWorldY = (ty + 0.5) * this.tileSize;
+          let minDist = Infinity;
+          for (const h of herbivores) {
+            const dx = h.pos.x - cellWorldX;
+            const dy = h.pos.y - cellWorldY;
+            const d = Math.sqrt(dx * dx + dy * dy);
+            if (d < minDist) minDist = d;
+          }
+          const base = (gy * gridSize + gx) * numChannels;
+          data[base + 5] = Math.max(0, 1 - minDist / radarRange);
+        }
+      }
+    }
+
+    return tf.tensor4d(data, [1, gridSize, gridSize, numChannels]);
   }
 }

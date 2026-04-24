@@ -1,10 +1,12 @@
 import { Vec2 } from '../utils/Vec2.js';
 
+const TURN_RATE = Math.PI / 4; // 45 degrees per action
+
 export class Creature {
   constructor(x, y, world) {
     this.pos = new Vec2(x, y);
     this.vel = new Vec2(0, 0);
-    this.facing = 0;
+    this.facing = Math.random() * Math.PI * 2; // random initial heading
     this.energy = 100;
     this.maxEnergy = 100;
     this.age = 0;
@@ -17,18 +19,31 @@ export class Creature {
   }
 
   getState() {
-    return this.world.getLocalGrid(this.pos.x, this.pos.y, 7);
+    return this.world.getLocalGrid(this.pos.x, this.pos.y, 7, 5, { energyFraction: this.energy / this.maxEnergy });
   }
 
   applyAction(action) {
-    const speed = 20;
-    const moves = [
-      new Vec2(0, -1), new Vec2(0, 1),
-      new Vec2(-1, 0), new Vec2(1, 0),
-      new Vec2(0, 0)
-    ];
-    this.vel = moves[action].scale(speed);
-    if (action < 4) this.facing = Math.atan2(this.vel.y, this.vel.x);
+    // Actions: 0=forward, 1=turn-left+forward, 2=turn-right+forward, 3=slow, 4=stay
+    const speed = this.speed || 25;
+    switch (action) {
+      case 0: // forward
+        this.vel = new Vec2(Math.cos(this.facing), Math.sin(this.facing)).scale(speed);
+        break;
+      case 1: // turn left and move
+        this.facing -= TURN_RATE;
+        this.vel = new Vec2(Math.cos(this.facing), Math.sin(this.facing)).scale(speed);
+        break;
+      case 2: // turn right and move
+        this.facing += TURN_RATE;
+        this.vel = new Vec2(Math.cos(this.facing), Math.sin(this.facing)).scale(speed);
+        break;
+      case 3: // slow / brake
+        this.vel = this.vel.scale(0.3);
+        break;
+      case 4: // stay
+        this.vel = new Vec2(0, 0);
+        break;
+    }
   }
 
   step(dt) {

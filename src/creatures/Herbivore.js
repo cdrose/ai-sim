@@ -2,7 +2,7 @@ import { Creature } from './Creature.js';
 import { DQNAgent } from '../ai/DQNAgent.js';
 
 export class Herbivore extends Creature {
-  static agent = new DQNAgent({ gridSize: 7, numActions: 5, bufferSize: 500 });
+  static agent = new DQNAgent({ gridSize: 7, numChannels: 5, numActions: 5, bufferSize: 500 });
 
   constructor(x, y, world) {
     super(x, y, world);
@@ -12,15 +12,22 @@ export class Herbivore extends Creature {
     this.agent = Herbivore.agent;
   }
 
+  getState() {
+    return this.world.getLocalGrid(this.pos.x, this.pos.y, 7, 5, {
+      energyFraction: this.energy / this.maxEnergy
+    });
+  }
+
   computeReward() {
     let reward = 0;
     const tile = this.world.getTileAt(this.pos.x, this.pos.y);
+    const hungerFactor = 2 - (this.energy / this.maxEnergy); // 1.0 (full) to 2.0 (empty)
 
     if (tile && tile.food > 0) {
       tile.food = 0;
       tile.foodTimer = 0;
       this.energy = Math.min(this.maxEnergy, this.energy + 30);
-      reward += 2.0;
+      reward += 2.0 * hungerFactor;
     }
 
     const nearby = this.world.getCreaturesNear(this.pos.x, this.pos.y, 50);
@@ -33,6 +40,9 @@ export class Herbivore extends Creature {
 
     if (tile && tile.type === 2) reward -= 0.5;
     if (tile && tile.type === 1) reward -= 0.3;
+
+    // Small bonus for moving — discourages standing still
+    if (this.vel.length() > 5) reward += 0.02;
 
     return reward;
   }

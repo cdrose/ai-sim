@@ -1,9 +1,10 @@
 import * as tf from '@tensorflow/tfjs';
 
 export class Brain {
-  constructor(gridSize = 7, numActions = 5) {
+  constructor(gridSize = 7, numActions = 5, numChannels = 5) {
     this.gridSize = gridSize;
     this.numActions = numActions;
+    this.numChannels = numChannels;
     this.model = this._buildModel();
     this.targetModel = this._buildModel();
     this.syncTargetModel();
@@ -12,7 +13,7 @@ export class Brain {
   _buildModel() {
     const model = tf.sequential();
     model.add(tf.layers.conv2d({
-      inputShape: [this.gridSize, this.gridSize, 4],
+      inputShape: [this.gridSize, this.gridSize, this.numChannels],
       filters: 16, kernelSize: 3, padding: 'same', activation: 'relu'
     }));
     model.add(tf.layers.conv2d({

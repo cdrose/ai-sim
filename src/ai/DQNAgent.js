@@ -12,7 +12,7 @@ export class DQNAgent {
     this.epsilonDecay = options.epsilonDecay || 0.9995;
     this.batchSize = options.batchSize || 32;
     this.targetSyncInterval = options.targetSyncInterval || 200;
-    this.brain = new Brain(this.gridSize, this.numActions);
+    this.brain = new Brain(this.gridSize, this.numActions, options.numChannels || 5);
     this.buffer = new ReplayBuffer(options.bufferSize || 500);
     this.stepCount = 0;
     this.lastLoss = 0;
