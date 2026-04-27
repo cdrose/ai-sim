@@ -6,6 +6,7 @@ import { Predator } from './creatures/Predator.js';
 import { Toolbar } from './ui/Toolbar.js';
 import { HUD } from './ui/HUD.js';
 import { Controls } from './ui/Controls.js';
+import { LossChart } from './ui/LossChart.js';
 
 const canvas = document.getElementById('sim-canvas');
 
@@ -28,6 +29,8 @@ const renderer = new Renderer(canvas, world);
 const toolbar = new Toolbar(canvas, world);
 const hud = new HUD(document.getElementById('hud'));
 const controls = new Controls(document.getElementById('controls'), world);
+const herbChart = new LossChart(document.getElementById('chart-herb'), '🌿 Herb Loss', '#4caf50');
+const predChart = new LossChart(document.getElementById('chart-pred'), '🦊 Pred Loss', '#ff7043');
 
 for (let i = 0; i < 30; i++) {
   const x = Math.random() * gridW * TILE_SIZE;
@@ -62,6 +65,10 @@ async function loop(now) {
   Herbivore.agent?.trainStep();
   Predator.agent?.trainStep();
 
+  // Feed loss values into charts
+  if (Herbivore.agent?.lastLoss) herbChart.addLoss(Herbivore.agent.lastLoss);
+  if (Predator.agent?.lastLoss) predChart.addLoss(Predator.agent.lastLoss);
+
   world.step(dt);
 
   world.creatures = world.creatures.filter(c => c.alive);
@@ -87,6 +94,8 @@ async function loop(now) {
 
   renderer.render(toolbar.activeTool);
   hud.update(world, Herbivore.agent, Predator.agent);
+  herbChart.render();
+  predChart.render();
 
   requestAnimationFrame(loop);
 }
