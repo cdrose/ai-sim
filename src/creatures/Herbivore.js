@@ -2,7 +2,7 @@ import { Creature } from './Creature.js';
 import { DQNAgent } from '../ai/DQNAgent.js';
 
 export class Herbivore extends Creature {
-  static agent = new DQNAgent({ gridSize: 7, numChannels: 5, numActions: 5, bufferSize: 500 });
+  static agent = new DQNAgent({ gridSize: 7, numChannels: 7, numActions: 5, bufferSize: 2000 });
 
   constructor(x, y, world) {
     super(x, y, world);
@@ -14,8 +14,10 @@ export class Herbivore extends Creature {
   }
 
   getState() {
-    return this.world.getLocalGrid(this.pos.x, this.pos.y, 7, 5, {
-      energyFraction: this.energy / this.maxEnergy
+    return this.world.getLocalGrid(this.pos.x, this.pos.y, 7, 7, {
+      energyFraction: this.energy / this.maxEnergy,
+      headingSin: this.headingSin,
+      headingCos: this.headingCos,
     });
   }
 

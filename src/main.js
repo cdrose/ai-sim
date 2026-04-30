@@ -32,12 +32,12 @@ const controls = new Controls(document.getElementById('controls'), world);
 const herbChart = new LossChart(document.getElementById('chart-herb'), '🌿 Herb Loss', '#4caf50');
 const predChart = new LossChart(document.getElementById('chart-pred'), '🦊 Pred Loss', '#ff7043');
 
-for (let i = 0; i < 30; i++) {
+for (let i = 0; i < 70; i++) {
   const x = Math.random() * gridW * TILE_SIZE;
   const y = Math.random() * gridH * TILE_SIZE;
   world.addCreature(new Herbivore(x, y, world));
 }
-for (let i = 0; i < 8; i++) {
+for (let i = 0; i < 16; i++) {
   const x = Math.random() * gridW * TILE_SIZE;
   const y = Math.random() * gridH * TILE_SIZE;
   world.addCreature(new Predator(x, y, world));
@@ -73,8 +73,8 @@ async function loop(now) {
 
   world.creatures = world.creatures.filter(c => c.alive);
 
-  if (world.creatures.filter(c => c.type === 'herbivore').length < 5) {
-    for (let i = 0; i < 10; i++) {
+  if (world.creatures.filter(c => c.type === 'herbivore').length < 20) {
+    for (let i = 0; i < 20; i++) {
       world.addCreature(new Herbivore(
         Math.random() * gridW * TILE_SIZE,
         Math.random() * gridH * TILE_SIZE,
@@ -82,8 +82,8 @@ async function loop(now) {
       ));
     }
   }
-  if (world.creatures.filter(c => c.type === 'predator').length < 2) {
-    for (let i = 0; i < 3; i++) {
+  if (world.creatures.filter(c => c.type === 'predator').length < 5) {
+    for (let i = 0; i < 5; i++) {
       world.addCreature(new Predator(
         Math.random() * gridW * TILE_SIZE,
         Math.random() * gridH * TILE_SIZE,

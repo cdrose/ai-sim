@@ -34,10 +34,10 @@ export class World {
       this._placeBlob(TileType.DANGER, 15);
     }
 
-    // Scatter food on 4% of GRASS tiles — sparse enough to force herbivores to roam
+    // Scatter food on 10% of GRASS tiles
     for (let tx = 0; tx < this.gridW; tx++) {
       for (let ty = 0; ty < this.gridH; ty++) {
-        if (this.tiles[tx][ty].type === TileType.GRASS && Math.random() < 0.04) {
+        if (this.tiles[tx][ty].type === TileType.GRASS && Math.random() < 0.10) {
           this.addFood(tx, ty);
         }
       }
@@ -57,8 +57,8 @@ export class World {
   }
 
   step(dt) {
-    // Regrow food on food sources — 15s cooldown keeps food scarce
-    const foodThreshold = 15;
+    // Regrow food on food sources — 5s cooldown
+    const foodThreshold = 5;
     for (const key of this.foodSources) {
       const [tx, ty] = key.split(',').map(Number);
       const tile = this.getTile(tx, ty);
@@ -133,6 +133,8 @@ export class World {
     const centerTx = Math.floor(cx / this.tileSize);
     const centerTy = Math.floor(cy / this.tileSize);
     const energyFraction = options.energyFraction !== undefined ? options.energyFraction : 1.0;
+    const headingSin = options.headingSin !== undefined ? options.headingSin : 0.0;
+    const headingCos = options.headingCos !== undefined ? options.headingCos : 1.0;
 
     for (let gy = 0; gy < gridSize; gy++) {
       for (let gx = 0; gx < gridSize; gx++) {
@@ -143,8 +145,10 @@ export class World {
         const tile = this.getTile(tx, ty);
         if (!tile) {
           data[base + 0] = 1.0; // OOB = danger
-          // channels 1-4 remain 0
+          // channels 1-3 remain 0
           if (numChannels >= 5) data[base + 4] = energyFraction;
+          if (numChannels >= 6) data[base + 5] = headingSin;
+          if (numChannels >= 7) data[base + 6] = headingCos;
           continue;
         }
 
@@ -159,13 +163,15 @@ export class World {
         data[base + 2] = creaturesOnTile.some(c => c.type === 'herbivore') ? 1.0 : 0.0;
         data[base + 3] = creaturesOnTile.some(c => c.type === 'predator') ? 1.0 : 0.0;
 
-        // Channel 4: hunger (uniform fill)
         if (numChannels >= 5) data[base + 4] = energyFraction;
+        // Channels 5 & 6: sin/cos of heading (uniform across all cells)
+        if (numChannels >= 6) data[base + 5] = headingSin;
+        if (numChannels >= 7) data[base + 6] = headingCos;
       }
     }
 
-    // Channel 5 (optional): prey radar gradient toward nearest herbivore
-    if (numChannels >= 6) {
+    // Channel 7 (predator only, numChannels >= 8): prey radar gradient
+    if (numChannels >= 8) {
       const herbivores = this.creatures.filter(c => c.type === 'herbivore' && c.alive);
       const radarRange = 300;
       for (let gy = 0; gy < gridSize; gy++) {
@@ -182,7 +188,7 @@ export class World {
             if (d < minDist) minDist = d;
           }
           const base = (gy * gridSize + gx) * numChannels;
-          data[base + 5] = Math.max(0, 1 - minDist / radarRange);
+          data[base + 7] = Math.max(0, 1 - minDist / radarRange);
         }
       }
     }
