@@ -2,7 +2,7 @@ import { Creature } from './Creature.js';
 import { DQNAgent } from '../ai/DQNAgent.js';
 
 export class Herbivore extends Creature {
-  static agent = new DQNAgent({ gridSize: 7, numChannels: 7, numActions: 5, bufferSize: 2000 });
+  static agent = new DQNAgent({ gridSize: 13, numChannels: 7, numActions: 5, bufferSize: 2000 });
 
   constructor(x, y, world) {
     super(x, y, world);
@@ -14,15 +14,15 @@ export class Herbivore extends Creature {
   }
 
   getState() {
-    return this.world.getLocalGrid(this.pos.x, this.pos.y, 7, 7, {
+    return this.world.getLocalGrid(this.pos.x, this.pos.y, 13, 7, {
       energyFraction: this.energy / this.maxEnergy,
       headingSin: this.headingSin,
       headingCos: this.headingCos,
     });
   }
 
-  // Find nearest food tile within searchRadius pixels, returns {x, y, dist} or null
-  _getNearestFood(searchRadius = 120) {
+  // Search radius matches the 13×13 grid at tileSize=10: 6 tiles = 60px
+  _getNearestFood(searchRadius = 65) {
     const tileSize = this.world.tileSize;
     const cx = Math.floor(this.pos.x / tileSize);
     const cy = Math.floor(this.pos.y / tileSize);
