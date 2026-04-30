@@ -136,6 +136,24 @@ export class World {
     const headingSin = options.headingSin !== undefined ? options.headingSin : 0.0;
     const headingCos = options.headingCos !== undefined ? options.headingCos : 1.0;
 
+    // Pre-bucket creatures in the visible window into a tile map — O(N) instead
+    // of O(N × gridSize²) from filtering all creatures for every cell.
+    const tileMinX = centerTx - half;
+    const tileMinY = centerTy - half;
+    const creatureMap = new Map(); // "tx,ty" -> {herb, pred}
+    for (const c of this.creatures) {
+      if (!c.alive) continue;
+      const ctx = Math.floor(c.pos.x / this.tileSize);
+      const cty = Math.floor(c.pos.y / this.tileSize);
+      if (ctx < tileMinX || ctx > centerTx + half) continue;
+      if (cty < tileMinY || cty > centerTy + half) continue;
+      const key = `${ctx},${cty}`;
+      const entry = creatureMap.get(key) || { herb: false, pred: false };
+      if (c.type === 'herbivore') entry.herb = true;
+      else if (c.type === 'predator') entry.pred = true;
+      creatureMap.set(key, entry);
+    }
+
     for (let gy = 0; gy < gridSize; gy++) {
       for (let gx = 0; gx < gridSize; gx++) {
         const tx = centerTx + gx - half;
@@ -145,7 +163,6 @@ export class World {
         const tile = this.getTile(tx, ty);
         if (!tile) {
           data[base + 0] = 1.0; // OOB = danger
-          // channels 1-3 remain 0
           if (numChannels >= 5) data[base + 4] = energyFraction;
           if (numChannels >= 6) data[base + 5] = headingSin;
           if (numChannels >= 7) data[base + 6] = headingCos;
@@ -155,22 +172,17 @@ export class World {
         data[base + 0] = tile.type / 2.0;
         data[base + 1] = tile.food > 0 ? 1.0 : 0.0;
 
-        const creaturesOnTile = this.creatures.filter(c =>
-          c.alive &&
-          Math.floor(c.pos.x / this.tileSize) === tx &&
-          Math.floor(c.pos.y / this.tileSize) === ty
-        );
-        data[base + 2] = creaturesOnTile.some(c => c.type === 'herbivore') ? 1.0 : 0.0;
-        data[base + 3] = creaturesOnTile.some(c => c.type === 'predator') ? 1.0 : 0.0;
+        const entry = creatureMap.get(`${tx},${ty}`);
+        data[base + 2] = entry?.herb ? 1.0 : 0.0;
+        data[base + 3] = entry?.pred ? 1.0 : 0.0;
 
         if (numChannels >= 5) data[base + 4] = energyFraction;
-        // Channels 5 & 6: sin/cos of heading (uniform across all cells)
         if (numChannels >= 6) data[base + 5] = headingSin;
         if (numChannels >= 7) data[base + 6] = headingCos;
       }
     }
 
-    // Channel 7 (predator only, numChannels >= 8): prey radar gradient
+    // Channel 7 (predator only): nearest-herbivore radar per cell
     if (numChannels >= 8) {
       const herbivores = this.creatures.filter(c => c.type === 'herbivore' && c.alive);
       const radarRange = 300;

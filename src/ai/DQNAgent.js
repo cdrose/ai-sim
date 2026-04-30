@@ -13,9 +13,10 @@ export class DQNAgent {
     this.batchSize = options.batchSize || 32;
     this.targetSyncInterval = options.targetSyncInterval || 200;
     this.brain = new Brain(this.gridSize, this.numActions, options.numChannels || 5);
-    this.buffer = new ReplayBuffer(options.bufferSize || 500);
+    this.buffer = new ReplayBuffer(options.bufferSize || 10000);
     this.stepCount = 0;
     this.lastLoss = 0;
+    this._training = false; // guard against concurrent async calls
   }
 
   selectAction(stateTensor) {
@@ -44,33 +45,41 @@ export class DQNAgent {
   }
 
   async trainStep() {
+    // Skip if a training step is already in progress — prevents concurrent
+    // model.fit() calls that cause diverging Q-value targets.
+    if (this._training) return;
     if (this.buffer.size < this.batchSize) return;
 
-    const batch = this.buffer.sample(this.batchSize);
+    this._training = true;
+    try {
+      const batch = this.buffer.sample(this.batchSize);
 
-    const states = tf.concat(batch.map(e => e.state));
-    const nextStates = tf.concat(batch.map(e => e.nextState));
+      const states = tf.concat(batch.map(e => e.state));
+      const nextStates = tf.concat(batch.map(e => e.nextState));
 
-    const currentQsData = tf.tidy(() => this.brain.predict(states).arraySync());
-    const nextQsData = tf.tidy(() => this.brain.predictTarget(nextStates).arraySync());
+      const currentQsData = tf.tidy(() => this.brain.predict(states).arraySync());
+      const nextQsData = tf.tidy(() => this.brain.predictTarget(nextStates).arraySync());
 
-    for (let i = 0; i < batch.length; i++) {
-      const { action, reward, done } = batch[i];
-      const target = done ? reward : reward + this.gamma * Math.max(...nextQsData[i]);
-      currentQsData[i][action] = target;
+      for (let i = 0; i < batch.length; i++) {
+        const { action, reward, done } = batch[i];
+        const target = done ? reward : reward + this.gamma * Math.max(...nextQsData[i]);
+        currentQsData[i][action] = target;
+      }
+
+      const targets = tf.tensor2d(currentQsData);
+      const result = await this.brain.trainOnBatch(states, targets);
+
+      states.dispose();
+      nextStates.dispose();
+      targets.dispose();
+
+      if (this.epsilon > this.epsilonMin) this.epsilon *= this.epsilonDecay;
+      this.stepCount++;
+      if (this.stepCount % this.targetSyncInterval === 0) this.brain.syncTargetModel();
+      if (result?.history?.loss) this.lastLoss = result.history.loss[0];
+    } finally {
+      this._training = false;
     }
-
-    const targets = tf.tensor2d(currentQsData);
-    const result = await this.brain.trainOnBatch(states, targets);
-
-    states.dispose();
-    nextStates.dispose();
-    targets.dispose();
-
-    if (this.epsilon > this.epsilonMin) this.epsilon *= this.epsilonDecay;
-    this.stepCount++;
-    if (this.stepCount % this.targetSyncInterval === 0) this.brain.syncTargetModel();
-    if (result?.history?.loss) this.lastLoss = result.history.loss[0];
   }
 
   setBufferSize(size) {

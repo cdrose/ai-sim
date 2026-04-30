@@ -22,7 +22,7 @@ export class Brain {
     model.add(tf.layers.flatten());
     model.add(tf.layers.dense({ units: 64, activation: 'relu' }));
     model.add(tf.layers.dense({ units: this.numActions }));
-    model.compile({ optimizer: tf.train.adam(0.001), loss: 'meanSquaredError' });
+    model.compile({ optimizer: tf.train.adam(0.0003), loss: 'meanSquaredError' });
     return model;
   }
 

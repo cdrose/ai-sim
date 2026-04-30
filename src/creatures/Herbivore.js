@@ -2,7 +2,7 @@ import { Creature } from './Creature.js';
 import { DQNAgent } from '../ai/DQNAgent.js';
 
 export class Herbivore extends Creature {
-  static agent = new DQNAgent({ gridSize: 13, numChannels: 7, numActions: 5, bufferSize: 2000 });
+  static agent = new DQNAgent({ gridSize: 13, numChannels: 7, numActions: 5, bufferSize: 20000 });
 
   constructor(x, y, world) {
     super(x, y, world);
