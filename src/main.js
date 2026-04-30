@@ -7,6 +7,7 @@ import { Toolbar } from './ui/Toolbar.js';
 import { HUD } from './ui/HUD.js';
 import { Controls } from './ui/Controls.js';
 import { LossChart } from './ui/LossChart.js';
+import { ModelInspector } from './ui/ModelInspector.js';
 
 const canvas = document.getElementById('sim-canvas');
 
@@ -31,6 +32,8 @@ const hud = new HUD(document.getElementById('hud'));
 const controls = new Controls(document.getElementById('controls'), world);
 const herbChart = new LossChart(document.getElementById('chart-herb'), '🌿 Herb Loss', '#4caf50');
 const predChart = new LossChart(document.getElementById('chart-pred'), '🦊 Pred Loss', '#ff7043');
+const inspector = new ModelInspector(Herbivore.agent, Predator.agent);
+document.getElementById('btn-inspect').addEventListener('click', () => inspector.open());
 
 for (let i = 0; i < 70; i++) {
   const x = Math.random() * gridW * TILE_SIZE;
