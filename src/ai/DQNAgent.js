@@ -17,6 +17,7 @@ export class DQNAgent {
     this.stepCount = 0;
     this.lastLoss = 0;
     this._training = false; // guard against concurrent async calls
+    this.onTrainStep = null; // (stats) => void — wired by main.js for debug logging
   }
 
   selectAction(stateTensor) {
@@ -79,6 +80,30 @@ export class DQNAgent {
       this.stepCount++;
       if (this.stepCount % this.targetSyncInterval === 0) this.brain.syncTargetModel();
       if (result?.history?.loss) this.lastLoss = result.history.loss[0];
+
+      if (this.onTrainStep) {
+        const rewards = batch.map(e => e.reward);
+        const mean = rewards.reduce((a, b) => a + b, 0) / rewards.length;
+        const std  = Math.sqrt(rewards.map(r => (r - mean) ** 2)
+                               .reduce((a, b) => a + b, 0) / rewards.length);
+        const actionCounts = Array(this.numActions).fill(0);
+        batch.forEach(e => actionCounts[e.action]++);
+        this.onTrainStep({
+          stepCount:  this.stepCount,
+          loss:       this.lastLoss,
+          epsilon:    this.epsilon,
+          bufferSize: this.buffer.size,
+          bufferMax:  this.buffer.maxSize,
+          prioritySize: this.buffer.prioritySize,
+          batchSize:  batch.length,
+          nPriority:  batch.filter(e => Math.abs(e.reward) >= 1.0).length,
+          rewardMean: mean,
+          rewardStd:  std,
+          rewardMin:  Math.min(...rewards),
+          rewardMax:  Math.max(...rewards),
+          actionCounts,
+        });
+      }
     } finally {
       this._training = false;
     }

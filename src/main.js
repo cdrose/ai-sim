@@ -8,6 +8,7 @@ import { HUD } from './ui/HUD.js';
 import { Controls } from './ui/Controls.js';
 import { LossChart } from './ui/LossChart.js';
 import { ModelInspector } from './ui/ModelInspector.js';
+import { DebugConsole } from './ui/DebugConsole.js';
 
 const canvas = document.getElementById('sim-canvas');
 
@@ -35,6 +36,35 @@ const predChart = new LossChart(document.getElementById('chart-pred'), '🦊 Pre
 const inspector = new ModelInspector(Herbivore.agent, Predator.agent);
 document.getElementById('btn-inspect').addEventListener('click', () => inspector.open());
 
+const debugConsole = new DebugConsole(document.getElementById('debug-console'));
+
+// Log every Nth training step to avoid flooding; every step when paused.
+const LOG_INTERVAL = 20;
+const makeTrainLogger = (label) => (s) => {
+  if (!simPaused && s.stepCount % LOG_INTERVAL !== 0) return;
+  const ac = s.actionCounts.map((n, i) => `${i}:${n}`).join(' ');
+  DebugConsole.log('TRAIN',
+    `${label} step:${s.stepCount} loss:${s.loss.toFixed(4)} ε:${s.epsilon.toFixed(3)}\n` +
+    `  buf:${s.bufferSize}/${s.bufferMax} (priority pool:${s.prioritySize})\n` +
+    `  batch(${s.batchSize}) priority:${s.nPriority} uniform:${s.batchSize - s.nPriority}\n` +
+    `  reward μ=${s.rewardMean.toFixed(3)} σ=${s.rewardStd.toFixed(3)} ` +
+    `[${s.rewardMin.toFixed(2)}, ${s.rewardMax.toFixed(2)}]\n` +
+    `  actions: ${ac}`
+  );
+};
+Herbivore.agent.onTrainStep = makeTrainLogger('HERB');
+Predator.agent.onTrainStep  = makeTrainLogger('PRED');
+
+let simPaused   = false;
+let stepOnce    = false;
+
+debugConsole.onPauseToggle = (isPaused) => {
+  simPaused = isPaused;
+};
+debugConsole.onStep = () => {
+  stepOnce = true;
+};
+
 for (let i = 0; i < 70; i++) {
   const x = Math.random() * gridW * TILE_SIZE;
   const y = Math.random() * gridH * TILE_SIZE;
@@ -56,42 +86,46 @@ controls.onSpeedChange = (s) => { simSpeed = s; };
 async function loop(now) {
   const rawDt = (now - lastTime) / 1000;
   lastTime = now;
-  const dt = Math.min(rawDt * simSpeed, 0.1);
 
-  for (const creature of [...world.creatures]) {
-    if (creature.alive) {
-      creature.think();
+  const shouldTick = !simPaused || stepOnce;
+  if (stepOnce) stepOnce = false;
+
+  if (shouldTick) {
+    const dt = Math.min(rawDt * simSpeed, 0.1);
+
+    for (const creature of [...world.creatures]) {
+      if (creature.alive) creature.think();
     }
-  }
 
-  // Fire-and-forget training
-  Herbivore.agent?.trainStep();
-  Predator.agent?.trainStep();
+    // Fire-and-forget training
+    Herbivore.agent?.trainStep();
+    Predator.agent?.trainStep();
 
-  // Feed loss values into charts
-  if (Herbivore.agent?.lastLoss) herbChart.addLoss(Herbivore.agent.lastLoss);
-  if (Predator.agent?.lastLoss) predChart.addLoss(Predator.agent.lastLoss);
+    // Feed loss values into charts
+    if (Herbivore.agent?.lastLoss) herbChart.addLoss(Herbivore.agent.lastLoss);
+    if (Predator.agent?.lastLoss)  predChart.addLoss(Predator.agent.lastLoss);
 
-  world.step(dt);
+    world.step(dt);
 
-  world.creatures = world.creatures.filter(c => c.alive);
+    world.creatures = world.creatures.filter(c => c.alive);
 
-  if (world.creatures.filter(c => c.type === 'herbivore').length < 20) {
-    for (let i = 0; i < 20; i++) {
-      world.addCreature(new Herbivore(
-        Math.random() * gridW * TILE_SIZE,
-        Math.random() * gridH * TILE_SIZE,
-        world
-      ));
+    if (world.creatures.filter(c => c.type === 'herbivore').length < 20) {
+      for (let i = 0; i < 20; i++) {
+        world.addCreature(new Herbivore(
+          Math.random() * gridW * TILE_SIZE,
+          Math.random() * gridH * TILE_SIZE,
+          world
+        ));
+      }
     }
-  }
-  if (world.creatures.filter(c => c.type === 'predator').length < 5) {
-    for (let i = 0; i < 5; i++) {
-      world.addCreature(new Predator(
-        Math.random() * gridW * TILE_SIZE,
-        Math.random() * gridH * TILE_SIZE,
-        world
-      ));
+    if (world.creatures.filter(c => c.type === 'predator').length < 5) {
+      for (let i = 0; i < 5; i++) {
+        world.addCreature(new Predator(
+          Math.random() * gridW * TILE_SIZE,
+          Math.random() * gridH * TILE_SIZE,
+          world
+        ));
+      }
     }
   }
 
