@@ -93,3 +93,61 @@ describe('ReplayBuffer', () => {
     expect(buf.size).toBe(5);
   });
 });
+
+describe('ReplayBuffer — priority sampling', () => {
+  const lowReward  = (id) => ({ ...mockEntry(), reward:  0.0, id });
+  const highReward = (id) => ({ ...mockEntry(), reward: 10.0, id });
+  const negReward  = (id) => ({ ...mockEntry(), reward: -5.0, id });
+
+  test('prioritySize starts at 0', () => {
+    expect(new ReplayBuffer(20).prioritySize).toBe(0);
+  });
+
+  test('low-reward entries do not enter priority pool', () => {
+    const buf = new ReplayBuffer(20);
+    for (let i = 0; i < 10; i++) buf.push(lowReward(i));
+    expect(buf.prioritySize).toBe(0);
+  });
+
+  test('high-reward entries enter priority pool', () => {
+    const buf = new ReplayBuffer(20);
+    buf.push(highReward(1));
+    buf.push(highReward(2));
+    expect(buf.prioritySize).toBe(2);
+  });
+
+  test('negative reward entries enter priority pool', () => {
+    const buf = new ReplayBuffer(20);
+    buf.push(negReward(1));
+    expect(buf.prioritySize).toBe(1);
+  });
+
+  test('priority pool is capped at priorityMax', () => {
+    const buf = new ReplayBuffer(100); // _priorityMax = max(50, floor(100*0.1)) = 50
+    for (let i = 0; i < 200; i++) buf.push(highReward(i));
+    expect(buf.prioritySize).toBeLessThanOrEqual(buf._priorityMax);
+  });
+
+  test('sample with no priority entries still returns correct batch size', () => {
+    const buf = new ReplayBuffer(20);
+    for (let i = 0; i < 20; i++) buf.push(lowReward(i));
+    expect(buf.sample(8).length).toBe(8);
+  });
+
+  test('sample with priority entries returns correct batch size', () => {
+    const buf = new ReplayBuffer(20);
+    for (let i = 0; i < 16; i++) buf.push(lowReward(i));
+    for (let i = 0; i < 4;  i++) buf.push(highReward(100 + i));
+    expect(buf.sample(8).length).toBe(8);
+  });
+
+  test('sample includes priority entries when available', () => {
+    const buf = new ReplayBuffer(100);
+    for (let i = 0; i < 80; i++) buf.push(lowReward(i));
+    for (let i = 0; i < 4;  i++) buf.push(highReward(1000 + i));
+    // With priorityFrac=0.5 and batchSize=8, expect up to 4 priority entries
+    const batch = buf.sample(8, 0.5);
+    const nHigh = batch.filter(e => e.reward === 10).length;
+    expect(nHigh).toBeGreaterThan(0);
+  });
+});
