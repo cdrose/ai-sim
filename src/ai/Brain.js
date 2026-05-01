@@ -1,5 +1,17 @@
 import * as tf from '@tensorflow/tfjs';
 
+// Huber loss: quadratic for |error| <= delta, linear beyond.
+// Prevents the squared gradient explosion of MSE when Q-value targets
+// are large (e.g. early training with high-reward eating events).
+const huberLoss = (yTrue, yPred) => {
+  const delta = 1.0;
+  const error = yTrue.sub(yPred);
+  const absError = error.abs();
+  const quadratic = absError.minimum(delta);
+  const linear = absError.sub(quadratic);
+  return quadratic.square().mul(0.5).add(linear.mul(delta)).mean();
+};
+
 export class Brain {
   constructor(gridSize = 7, numActions = 5, numChannels = 5) {
     this.gridSize = gridSize;
@@ -22,7 +34,11 @@ export class Brain {
     model.add(tf.layers.flatten());
     model.add(tf.layers.dense({ units: 64, activation: 'relu' }));
     model.add(tf.layers.dense({ units: this.numActions }));
-    model.compile({ optimizer: tf.train.adam(0.0003), loss: 'meanSquaredError' });
+    // Huber loss is linear for large errors (|e| > delta) and quadratic for
+    // small ones, preventing the squared gradient explosion that causes MSE
+    // to plateau at a high value when Q-value targets are large early in
+    // training.
+    model.compile({ optimizer: tf.train.adam(0.0003), loss: huberLoss });
     return model;
   }
 

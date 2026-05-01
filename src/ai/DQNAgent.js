@@ -34,11 +34,13 @@ export class DQNAgent {
   }
 
   remember(state, action, reward, nextState, done) {
-    // Clone tensors so the buffer owns its own copies — caller may dispose theirs
+    // Clip rewards to [-1, 1] — bounds Q* to ~20 (= 1/1-γ) and keeps
+    // Bellman targets stable throughout training.
+    const clipped = Math.max(-1, Math.min(1, reward));
     this.buffer.push({
       state: state.clone(),
       action,
-      reward,
+      reward: clipped,
       nextState: nextState.clone(),
       done
     });
