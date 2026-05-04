@@ -63,6 +63,25 @@ export class DQNAgent {
       const currentQsData = tf.tidy(() => this.brain.predict(states).arraySync());
       const nextQsData = tf.tidy(() => this.brain.predictTarget(nextStates).arraySync());
 
+      // Q-spread: mean of (max_q - min_q) per sample — near 0 means model has collapsed
+      // to predicting the same value for all actions regardless of state.
+      const qSpreadMean = currentQsData.reduce((acc, q) =>
+        acc + Math.max(...q) - Math.min(...q), 0) / currentQsData.length;
+
+      // Food visibility: fraction of batch states that have at least one food tile visible.
+      // Channel 1 = food. Near 0% means food is never in the training buffer.
+      const nc = this.brain.numChannels;
+      const cellCount = this.gridSize * this.gridSize;
+      const statesFlat = states.dataSync();
+      let foodVisibleCount = 0;
+      for (let b = 0; b < batch.length; b++) {
+        const offset = b * cellCount * nc;
+        for (let p = 0; p < cellCount; p++) {
+          if (statesFlat[offset + p * nc + 1] > 0) { foodVisibleCount++; break; }
+        }
+      }
+      const foodVisibleFrac = foodVisibleCount / batch.length;
+
       for (let i = 0; i < batch.length; i++) {
         const { action, reward, done } = batch[i];
         const target = done ? reward : reward + this.gamma * Math.max(...nextQsData[i]);
@@ -102,6 +121,8 @@ export class DQNAgent {
           rewardMin:  Math.min(...rewards),
           rewardMax:  Math.max(...rewards),
           actionCounts,
+          qSpreadMean,
+          foodVisibleFrac,
         });
       }
     } finally {

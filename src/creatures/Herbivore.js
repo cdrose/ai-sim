@@ -1,5 +1,6 @@
 import { Creature } from './Creature.js';
 import { DQNAgent } from '../ai/DQNAgent.js';
+import { DebugConsole } from '../ui/DebugConsole.js';
 
 export class Herbivore extends Creature {
   static agent = new DQNAgent({ gridSize: 13, numChannels: 5, numActions: 8, bufferSize: 20000 });
@@ -11,6 +12,7 @@ export class Herbivore extends Creature {
     this.moveDuration = 0.5; // 2 tiles/second
     this.agent = Herbivore.agent;
     this.prevDistToFood = null;
+    this._dbgStep = 0; // throttle for approach-reward logging
   }
 
   getState() {
@@ -48,6 +50,9 @@ export class Herbivore extends Creature {
         this.energy = Math.min(this.maxEnergy, this.energy + 30);
         reward += 2.0 * hungerFactor;
         this.prevDistToFood = null;
+        DebugConsole.log('EVENT',
+          `HERB ate food  +${(2.0 * hungerFactor).toFixed(2)}  ` +
+          `energy:${this.energy.toFixed(0)}  tile:(${this.tileX},${this.tileY})`);
       }
       // No reward or eating when sated — leave food for others
     } else {
@@ -57,10 +62,30 @@ export class Herbivore extends Creature {
         if (food) {
           if (this.prevDistToFood !== null) {
             const delta = this.prevDistToFood - food.dist; // positive = approaching
-            reward += Math.max(-0.5, Math.min(0.5, delta * 0.5));
+            const approachReward = Math.max(-0.5, Math.min(0.5, delta * 0.5));
+            reward += approachReward;
+            // Log every 50th approach step to confirm signal is firing
+            this._dbgStep++;
+            if (this._dbgStep % 50 === 0) {
+              DebugConsole.log('EVENT',
+                `HERB approach  delta:${delta.toFixed(2)}  reward:${approachReward.toFixed(3)}  ` +
+                `dist:${food.dist.toFixed(1)}  prev:${this.prevDistToFood.toFixed(1)}`);
+            }
+          } else {
+            // First sighting — log so we can confirm food is being found at all
+            this._dbgStep++;
+            if (this._dbgStep % 50 === 0) {
+              DebugConsole.log('EVENT',
+                `HERB food-sight  dist:${food.dist.toFixed(1)}  tile:(${this.tileX},${this.tileY})  prevDist:null`);
+            }
           }
           this.prevDistToFood = food.dist;
         } else {
+          if (this._dbgStep % 200 === 0) {
+            DebugConsole.log('EVENT',
+              `HERB no-food-visible  tile:(${this.tileX},${this.tileY})  energy:${this.energy.toFixed(0)}`);
+          }
+          this._dbgStep++;
           this.prevDistToFood = null;
         }
       }

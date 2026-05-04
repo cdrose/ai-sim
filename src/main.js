@@ -49,6 +49,7 @@ const makeTrainLogger = (label) => (s) => {
     `  batch(${s.batchSize}) priority:${s.nPriority} uniform:${s.batchSize - s.nPriority}\n` +
     `  reward μ=${s.rewardMean.toFixed(3)} σ=${s.rewardStd.toFixed(3)} ` +
     `[${s.rewardMin.toFixed(2)}, ${s.rewardMax.toFixed(2)}]\n` +
+    `  Q-spread:${s.qSpreadMean.toFixed(4)}  food-visible:${(s.foodVisibleFrac*100).toFixed(0)}%\n` +
     `  actions: ${ac}`
   );
 };
