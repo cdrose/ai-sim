@@ -11,6 +11,8 @@ export class World {
     this.tiles = [];
     this.creatures = [];
     this.foodSources = new Set();
+    this.foodDensity = 0.03;    // fraction of GRASS tiles with food (live-adjustable)
+    this.foodRegrowTime = 15;   // seconds before an eaten tile regrows (live-adjustable)
   }
 
   init() {
@@ -34,10 +36,25 @@ export class World {
       this._placeBlob(TileType.DANGER, 15);
     }
 
-    // Scatter food on 10% of GRASS tiles
+    this._scatterFood();
+  }
+
+  // Clear existing food sources and re-scatter at current foodDensity.
+  // Safe to call while the sim is running — creatures keep their state.
+  resetFood() {
+    for (const key of this.foodSources) {
+      const [tx, ty] = key.split(',').map(Number);
+      const tile = this.getTile(tx, ty);
+      if (tile) { tile.food = 0; tile.foodTimer = 0; }
+    }
+    this.foodSources.clear();
+    this._scatterFood();
+  }
+
+  _scatterFood() {
     for (let tx = 0; tx < this.gridW; tx++) {
       for (let ty = 0; ty < this.gridH; ty++) {
-        if (this.tiles[tx][ty].type === TileType.GRASS && Math.random() < 0.10) {
+        if (this.tiles[tx][ty].type === TileType.GRASS && Math.random() < this.foodDensity) {
           this.addFood(tx, ty);
         }
       }
@@ -57,14 +74,13 @@ export class World {
   }
 
   step(dt) {
-    // Regrow food on food sources — 5s cooldown
-    const foodThreshold = 5;
+    // Regrow food on food sources using live-adjustable regrow time
     for (const key of this.foodSources) {
       const [tx, ty] = key.split(',').map(Number);
       const tile = this.getTile(tx, ty);
       if (tile && tile.food === 0) {
         tile.foodTimer += dt;
-        if (tile.foodTimer >= foodThreshold) {
+        if (tile.foodTimer >= this.foodRegrowTime) {
           tile.food = 1;
           tile.foodTimer = 0;
         }

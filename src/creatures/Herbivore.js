@@ -7,8 +7,8 @@ export class Herbivore extends Creature {
   constructor(x, y, world) {
     super(x, y, world);
     this.type = 'herbivore';
-    this.energyDrain = 2;
-    this.moveDuration = 0.25; // 4 tiles/second
+    this.energyDrain = 3;
+    this.moveDuration = 0.5; // 2 tiles/second
     this.agent = Herbivore.agent;
     this.prevDistToFood = null;
   }

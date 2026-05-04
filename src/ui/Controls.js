@@ -7,15 +7,18 @@ export class Controls {
   }
 
   _render() {
+    const densityPct = Math.round(this.world.foodDensity * 100);
+    const regrow = this.world.foodRegrowTime;
+
     this.container.innerHTML = `
       <label>Sim Speed: <span id="speed-val">1x</span>
         <input type="range" id="speed" min="0.1" max="5" step="0.1" value="1">
       </label>
-      <label>Herb Buffer Size: <span id="herb-buf-val">500</span>
-        <input type="range" id="herb-buf" min="1" max="2000" step="1" value="500">
+      <label>Vegetation Density: <span id="density-val">${densityPct}%</span>
+        <input type="range" id="density" min="0.5" max="15" step="0.5" value="${densityPct}">
       </label>
-      <label>Pred Buffer Size: <span id="pred-buf-val">500</span>
-        <input type="range" id="pred-buf" min="1" max="2000" step="1" value="500">
+      <label>Regrow Time: <span id="regrow-val">${regrow}s</span>
+        <input type="range" id="regrow" min="3" max="60" step="1" value="${regrow}">
       </label>
       <label>Herb Epsilon: <span id="herb-eps-val">1.0</span>
         <input type="range" id="herb-eps" min="0.01" max="1" step="0.01" value="1">
@@ -30,19 +33,22 @@ export class Controls {
       document.getElementById('speed-val').textContent = v + 'x';
       if (this.onSpeedChange) this.onSpeedChange(v);
     });
+
+    document.getElementById('density').addEventListener('input', e => {
+      const pct = parseFloat(e.target.value);
+      document.getElementById('density-val').textContent = pct + '%';
+      this.world.foodDensity = pct / 100;
+      this.world.resetFood();
+    });
+
+    document.getElementById('regrow').addEventListener('input', e => {
+      const v = parseInt(e.target.value);
+      document.getElementById('regrow-val').textContent = v + 's';
+      this.world.foodRegrowTime = v;
+    });
   }
 
   wireAgents(herbAgent, predAgent) {
-    document.getElementById('herb-buf').addEventListener('input', e => {
-      const v = parseInt(e.target.value);
-      document.getElementById('herb-buf-val').textContent = v;
-      herbAgent?.setBufferSize(v);
-    });
-    document.getElementById('pred-buf').addEventListener('input', e => {
-      const v = parseInt(e.target.value);
-      document.getElementById('pred-buf-val').textContent = v;
-      predAgent?.setBufferSize(v);
-    });
     document.getElementById('herb-eps').addEventListener('input', e => {
       const v = parseFloat(e.target.value);
       document.getElementById('herb-eps-val').textContent = v.toFixed(2);
