@@ -51,10 +51,10 @@ export class World {
     this._scatterFoodClustered();
   }
 
-  // Scatter food in clusters so there are food-rich zones separated by
-  // sparse areas. Creatures must explore to find new patches rather than
-  // waiting in one spot. Expected total food count matches
-  // foodDensity * grassTileCount regardless of cluster layout.
+  // Scatter food with a soft exponential falloff from cluster centres so
+  // background areas have low but non-zero density and cluster peaks are
+  // naturally graded rather than hard-edged. Expected total food count is
+  // normalised to foodDensity * grassTileCount regardless of layout.
   _scatterFoodClustered() {
     const grassTiles = [];
     for (let tx = 0; tx < this.gridW; tx++) {
@@ -65,18 +65,26 @@ export class World {
     if (grassTiles.length === 0) return;
 
     const numClusters = Math.max(5, Math.round(grassTiles.length / 2500));
-    const clusterRadius = Math.max(10, Math.round(Math.min(this.gridW, this.gridH) * 0.10));
+    // sigma controls how quickly density falls off from each cluster centre
+    const sigma = Math.max(10, Math.round(Math.min(this.gridW, this.gridH) * 0.12));
 
     const centers = Array.from({ length: numClusters }, () =>
       grassTiles[Math.floor(Math.random() * grassTiles.length)]);
 
-    const inCluster = grassTiles.filter(([tx, ty]) =>
-      centers.some(([cx, cy]) => Math.hypot(tx - cx, ty - cy) <= clusterRadius));
+    // BASE: background multiplier (sparse but non-zero); PEAK: centre multiplier
+    const BASE = 0.25;
+    const PEAK = 3.5;
 
-    // Scale probability so expected food = foodDensity * grassTiles.length
-    const prob = Math.min(1, this.foodDensity * grassTiles.length / Math.max(1, inCluster.length));
-    for (const [tx, ty] of inCluster) {
-      if (Math.random() < prob) this.addFood(tx, ty);
+    const weights = grassTiles.map(([tx, ty]) => {
+      const minDist = Math.min(...centers.map(([cx, cy]) => Math.hypot(tx - cx, ty - cy)));
+      return BASE + (PEAK - BASE) * Math.exp(-minDist / sigma);
+    });
+
+    // Normalise so E[food placed] = foodDensity * grassTiles.length
+    const meanWeight = weights.reduce((a, b) => a + b, 0) / weights.length;
+    for (let i = 0; i < grassTiles.length; i++) {
+      const prob = Math.min(1, (weights[i] / meanWeight) * this.foodDensity);
+      if (Math.random() < prob) this.addFood(grassTiles[i][0], grassTiles[i][1]);
     }
   }
 
@@ -110,7 +118,13 @@ export class World {
       const tile = this.getTile(tx, ty);
       if (tile && tile.food === 0) {
         tile.foodTimer += dt;
-        if (tile.foodTimer >= this.foodRegrowTime) {
+        // Regrow faster when neighbouring tiles have food — seeds spread
+        const adj = [[-1,0],[1,0],[0,-1],[0,1]].reduce((n, [dx, dy]) => {
+          const t = this.getTile(tx + dx, ty + dy);
+          return n + (t && t.food > 0 ? 1 : 0);
+        }, 0);
+        const effectiveRegrowTime = this.foodRegrowTime * Math.max(0.3, 1 - adj * 0.2);
+        if (tile.foodTimer >= effectiveRegrowTime) {
           tile.food = 1;
           tile.foodTimer = 0;
         }

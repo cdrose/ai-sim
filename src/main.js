@@ -56,7 +56,27 @@ const makeTrainLogger = (label) => (s) => {
 Herbivore.agent.onTrainStep = makeTrainLogger('HERB');
 Predator.agent.onTrainStep  = makeTrainLogger('PRED');
 
-let simPaused   = false;
+// Spawn a creature near an existing one of the same type (if any exist),
+// otherwise fall back to a random position. Keeps populations spatially
+// cohesive rather than scattering randomly across the world.
+function spawnNear(CreatureClass, existing, world, spreadTiles = 40) {
+  if (existing.length > 0) {
+    const parent = existing[Math.floor(Math.random() * existing.length)];
+    const spread = spreadTiles * world.tileSize;
+    const x = Math.max(0, Math.min((world.gridW - 1) * world.tileSize,
+      parent.pos.x + (Math.random() - 0.5) * 2 * spread));
+    const y = Math.max(0, Math.min((world.gridH - 1) * world.tileSize,
+      parent.pos.y + (Math.random() - 0.5) * 2 * spread));
+    return new CreatureClass(x, y, world);
+  }
+  return new CreatureClass(
+    Math.random() * world.gridW * world.tileSize,
+    Math.random() * world.gridH * world.tileSize,
+    world
+  );
+}
+
+
 let stepOnce    = false;
 
 debugConsole.onPauseToggle = (isPaused) => {
@@ -110,23 +130,16 @@ async function loop(now) {
 
     world.creatures = world.creatures.filter(c => c.alive);
 
-    if (world.creatures.filter(c => c.type === 'herbivore').length < 20) {
-      for (let i = 0; i < 20; i++) {
-        world.addCreature(new Herbivore(
-          Math.random() * gridW * TILE_SIZE,
-          Math.random() * gridH * TILE_SIZE,
-          world
-        ));
-      }
+    const herbs = world.creatures.filter(c => c.type === 'herbivore' && c.alive);
+    const preds = world.creatures.filter(c => c.type === 'predator' && c.alive);
+
+    if (herbs.length < 20) {
+      for (let i = 0; i < 20; i++)
+        world.addCreature(spawnNear(Herbivore, herbs, world));
     }
-    if (world.creatures.filter(c => c.type === 'predator').length < 5) {
-      for (let i = 0; i < 5; i++) {
-        world.addCreature(new Predator(
-          Math.random() * gridW * TILE_SIZE,
-          Math.random() * gridH * TILE_SIZE,
-          world
-        ));
-      }
+    if (preds.length < 5) {
+      for (let i = 0; i < 5; i++)
+        world.addCreature(spawnNear(Predator, preds, world));
     }
   }
 
