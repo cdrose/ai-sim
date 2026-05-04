@@ -61,7 +61,12 @@ export class DQNAgent {
       const nextStates = tf.concat(batch.map(e => e.nextState));
 
       const currentQsData = tf.tidy(() => this.brain.predict(states).arraySync());
-      const nextQsData = tf.tidy(() => this.brain.predictTarget(nextStates).arraySync());
+      // Double DQN: online network selects the best next action, target network
+      // evaluates it. Breaks the max-bias feedback loop where the same network
+      // both picks and scores the next action, causing Q-values to overestimate
+      // and eventually collapse to uniform values.
+      const nextQsOnlineData = tf.tidy(() => this.brain.predict(nextStates).arraySync());
+      const nextQsTargetData = tf.tidy(() => this.brain.predictTarget(nextStates).arraySync());
 
       // Q-spread: mean of (max_q - min_q) per sample — near 0 means model has collapsed
       // to predicting the same value for all actions regardless of state.
@@ -84,7 +89,8 @@ export class DQNAgent {
 
       for (let i = 0; i < batch.length; i++) {
         const { action, reward, done } = batch[i];
-        const target = done ? reward : reward + this.gamma * Math.max(...nextQsData[i]);
+        const bestNextAction = nextQsOnlineData[i].indexOf(Math.max(...nextQsOnlineData[i]));
+        const target = done ? reward : reward + this.gamma * nextQsTargetData[i][bestNextAction];
         currentQsData[i][action] = target;
       }
 
