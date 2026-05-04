@@ -126,28 +126,21 @@ export class World {
     return this.creatures.filter(c => c.alive && c.pos.distTo(origin) <= radius);
   }
 
-  getLocalGrid(cx, cy, gridSize, numChannels = 5, options = {}) {
+  getLocalGrid(tileX, tileY, gridSize, numChannels = 5, options = {}) {
     const half = Math.floor(gridSize / 2);
     const data = new Float32Array(gridSize * gridSize * numChannels);
 
-    const centerTx = Math.floor(cx / this.tileSize);
-    const centerTy = Math.floor(cy / this.tileSize);
     const energyFraction = options.energyFraction !== undefined ? options.energyFraction : 1.0;
-    const headingSin = options.headingSin !== undefined ? options.headingSin : 0.0;
-    const headingCos = options.headingCos !== undefined ? options.headingCos : 1.0;
 
-    // Pre-bucket creatures in the visible window into a tile map — O(N) instead
-    // of O(N × gridSize²) from filtering all creatures for every cell.
-    const tileMinX = centerTx - half;
-    const tileMinY = centerTy - half;
-    const creatureMap = new Map(); // "tx,ty" -> {herb, pred}
+    // Pre-bucket creatures in the visible window — O(N) instead of O(N × gridSize²)
+    const tileMinX = tileX - half;
+    const tileMinY = tileY - half;
+    const creatureMap = new Map();
     for (const c of this.creatures) {
       if (!c.alive) continue;
-      const ctx = Math.floor(c.pos.x / this.tileSize);
-      const cty = Math.floor(c.pos.y / this.tileSize);
-      if (ctx < tileMinX || ctx > centerTx + half) continue;
-      if (cty < tileMinY || cty > centerTy + half) continue;
-      const key = `${ctx},${cty}`;
+      if (c.tileX < tileMinX || c.tileX > tileX + half) continue;
+      if (c.tileY < tileMinY || c.tileY > tileY + half) continue;
+      const key = `${c.tileX},${c.tileY}`;
       const entry = creatureMap.get(key) || { herb: false, pred: false };
       if (c.type === 'herbivore') entry.herb = true;
       else if (c.type === 'predator') entry.pred = true;
@@ -156,16 +149,14 @@ export class World {
 
     for (let gy = 0; gy < gridSize; gy++) {
       for (let gx = 0; gx < gridSize; gx++) {
-        const tx = centerTx + gx - half;
-        const ty = centerTy + gy - half;
+        const tx = tileX + gx - half;
+        const ty = tileY + gy - half;
         const base = (gy * gridSize + gx) * numChannels;
 
         const tile = this.getTile(tx, ty);
         if (!tile) {
           data[base + 0] = 1.0; // OOB = danger
           if (numChannels >= 5) data[base + 4] = energyFraction;
-          if (numChannels >= 6) data[base + 5] = headingSin;
-          if (numChannels >= 7) data[base + 6] = headingCos;
           continue;
         }
 
@@ -177,31 +168,6 @@ export class World {
         data[base + 3] = entry?.pred ? 1.0 : 0.0;
 
         if (numChannels >= 5) data[base + 4] = energyFraction;
-        if (numChannels >= 6) data[base + 5] = headingSin;
-        if (numChannels >= 7) data[base + 6] = headingCos;
-      }
-    }
-
-    // Channel 7 (predator only): nearest-herbivore radar per cell
-    if (numChannels >= 8) {
-      const herbivores = this.creatures.filter(c => c.type === 'herbivore' && c.alive);
-      const radarRange = 300;
-      for (let gy = 0; gy < gridSize; gy++) {
-        for (let gx = 0; gx < gridSize; gx++) {
-          const tx = centerTx + gx - half;
-          const ty = centerTy + gy - half;
-          const cellWorldX = (tx + 0.5) * this.tileSize;
-          const cellWorldY = (ty + 0.5) * this.tileSize;
-          let minDist = Infinity;
-          for (const h of herbivores) {
-            const dx = h.pos.x - cellWorldX;
-            const dy = h.pos.y - cellWorldY;
-            const d = Math.sqrt(dx * dx + dy * dy);
-            if (d < minDist) minDist = d;
-          }
-          const base = (gy * gridSize + gx) * numChannels;
-          data[base + 7] = Math.max(0, 1 - minDist / radarRange);
-        }
       }
     }
 

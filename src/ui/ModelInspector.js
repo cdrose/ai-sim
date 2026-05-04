@@ -1,20 +1,17 @@
 import * as tf from '@tensorflow/tfjs';
 
-const ACTION_NAMES = ['Straight', 'Left 45°', 'Left 90°', 'Right 45°', 'Right 90°'];
-const DIRS_DEG = [0, 45, 90, 135, 180, 225, 270, 315];
-const DEG2RAD = Math.PI / 180;
-// Arrows matching dirIndex 0-7 (E, SE, S, SW, W, NW, N, NE)
-const DIR_ARROWS = ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'];
+// 8 absolute world directions: N, NE, E, SE, S, SW, W, NW
+const ACTION_NAMES = ['N ↑', 'NE ↗', 'E →', 'SE ↘', 'S ↓', 'SW ↙', 'W ←', 'NW ↖'];
 
 function herbScenarios() {
-  const c = 6; // center of 13×13
+  const c = 6; // centre of 13×13
   return [
-    { title: 'Food directly ahead',   expected: 0, dirIndex: 0, overrides: [{gx:c+4, gy:c,   ch:1, val:1}] },
-    { title: 'Food ahead-left',       expected: 1, dirIndex: 0, overrides: [{gx:c+3, gy:c-3, ch:1, val:1}] },
-    { title: 'Food directly left',    expected: 2, dirIndex: 0, overrides: [{gx:c,   gy:c-4, ch:1, val:1}] },
-    { title: 'Food ahead-right',      expected: 3, dirIndex: 0, overrides: [{gx:c+3, gy:c+3, ch:1, val:1}] },
-    { title: 'Food directly right',   expected: 4, dirIndex: 0, overrides: [{gx:c,   gy:c+4, ch:1, val:1}] },
-    { title: 'Predator ahead + food left', expected: 2, dirIndex: 0, overrides: [
+    { title: 'Food to the North',        expected: 0, overrides: [{gx:c,   gy:c-4, ch:1, val:1}] },
+    { title: 'Food to the NE',           expected: 1, overrides: [{gx:c+3, gy:c-3, ch:1, val:1}] },
+    { title: 'Food to the East',         expected: 2, overrides: [{gx:c+4, gy:c,   ch:1, val:1}] },
+    { title: 'Food to the SE',           expected: 3, overrides: [{gx:c+3, gy:c+3, ch:1, val:1}] },
+    { title: 'Food to the South',        expected: 4, overrides: [{gx:c,   gy:c+4, ch:1, val:1}] },
+    { title: 'Predator East, food North', expected: 0, overrides: [
       {gx:c+2, gy:c,   ch:3, val:1},
       {gx:c,   gy:c-3, ch:1, val:1},
     ]},
@@ -23,31 +20,22 @@ function herbScenarios() {
 
 function predScenarios() {
   const c = 6;
-  const prey = (gx, gy) => [
-    {gx, gy, ch:2, val:1},
-    {gx, gy, ch:7, val:0.9},
-  ];
+  const prey = (gx, gy) => [{gx, gy, ch:2, val:1}];
   return [
-    { title: 'Prey directly ahead',  expected: 0, dirIndex: 0, overrides: prey(c+4, c)   },
-    { title: 'Prey ahead-left',      expected: 1, dirIndex: 0, overrides: prey(c+3, c-3) },
-    { title: 'Prey directly left',   expected: 2, dirIndex: 0, overrides: prey(c,   c-4) },
-    { title: 'Prey ahead-right',     expected: 3, dirIndex: 0, overrides: prey(c+3, c+3) },
-    { title: 'Prey directly right',  expected: 4, dirIndex: 0, overrides: prey(c,   c+4) },
-    { title: 'No prey visible',      expected: null, dirIndex: 0, overrides: []           },
+    { title: 'Prey to the North',   expected: 0, overrides: prey(c,   c-4) },
+    { title: 'Prey to the NE',      expected: 1, overrides: prey(c+3, c-3) },
+    { title: 'Prey to the East',    expected: 2, overrides: prey(c+4, c)   },
+    { title: 'Prey to the SE',      expected: 3, overrides: prey(c+3, c+3) },
+    { title: 'Prey to the West',    expected: 6, overrides: prey(c-4, c)   },
+    { title: 'No prey visible',     expected: null, overrides: []           },
   ];
 }
 
-function buildTensor(gridSize, numChannels, dirIndex, overrides) {
+function buildTensor(gridSize, numChannels, overrides) {
   const data = new Float32Array(gridSize * gridSize * numChannels);
-  const headingRad = DIRS_DEG[dirIndex] * DEG2RAD;
-  const sin = Math.sin(headingRad);
-  const cos = Math.cos(headingRad);
-
+  // Initialise energy at 40% for all cells
   for (let i = 0; i < gridSize * gridSize; i++) {
-    const b = i * numChannels;
-    if (numChannels >= 5) data[b + 4] = 0.4; // 40% energy — moderately hungry
-    if (numChannels >= 6) data[b + 5] = sin;
-    if (numChannels >= 7) data[b + 6] = cos;
+    if (numChannels >= 5) data[i * numChannels + 4] = 0.4;
   }
   for (const {gx, gy, ch, val} of overrides) {
     if (gx >= 0 && gx < gridSize && gy >= 0 && gy < gridSize) {
@@ -64,7 +52,7 @@ function runInference(agent, tensor) {
   });
 }
 
-function drawGrid(canvas, gridSize, dirIndex, overrides) {
+function drawGrid(canvas, gridSize, overrides) {
   const CELL = Math.floor(canvas.width / gridSize);
   const ctx = canvas.getContext('2d');
   const center = Math.floor(gridSize / 2);
@@ -124,28 +112,10 @@ function drawGrid(canvas, gridSize, dirIndex, overrides) {
     }
   }
 
-  // Heading arrow from center cell
-  const headingRad = DIRS_DEG[dirIndex] * DEG2RAD;
-  const mx = center * CELL + CELL / 2;
-  const my = center * CELL + CELL / 2;
-  const len = CELL * 0.45;
-  ctx.strokeStyle = '#fffde7';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(mx, my);
-  ctx.lineTo(mx + Math.cos(headingRad) * len, my + Math.sin(headingRad) * len);
-  ctx.stroke();
-  // Arrowhead
-  const angle = headingRad;
-  const tipX = mx + Math.cos(angle) * len;
-  const tipY = my + Math.sin(angle) * len;
-  ctx.beginPath();
-  ctx.moveTo(tipX, tipY);
-  ctx.lineTo(tipX - Math.cos(angle - 0.5) * 3, tipY - Math.sin(angle - 0.5) * 3);
-  ctx.lineTo(tipX - Math.cos(angle + 0.5) * 3, tipY - Math.sin(angle + 0.5) * 3);
-  ctx.closePath();
-  ctx.fillStyle = '#fffde7';
-  ctx.fill();
+  // North indicator — small 'N' label in top-right corner
+  ctx.fillStyle = 'rgba(255,255,200,0.5)';
+  ctx.font = `${Math.max(7, CELL - 2)}px sans-serif`;
+  ctx.fillText('N', canvas.width - CELL + 2, CELL - 2);
 }
 
 function renderQBars(container, qValues, expected) {
@@ -252,7 +222,7 @@ export class ModelInspector {
     const agent = isHerb ? this.herbAgent : this.predAgent;
     const scenarios = isHerb ? herbScenarios() : predScenarios();
     const gridSize = 13;
-    const numChannels = isHerb ? 7 : 8;
+    const numChannels = 5;
 
     // Update tab button styles
     this._el.querySelector('#mi-herb-tab').style.cssText = this._tabStyle(isHerb);
@@ -262,13 +232,13 @@ export class ModelInspector {
     this._el.querySelector('#mi-info').textContent =
       `ε = ${agent.epsilon.toFixed(3)}  |  training steps = ${agent.stepCount}  |  ` +
       `buffer = ${agent.buffer.size}  |  last loss = ${(agent.lastLoss||0).toFixed(5)}  |  ` +
-      `heading: → East for all scenarios`;
+      `heading: North is up for all scenarios`;
 
     const grid = this._el.querySelector('#mi-grid');
     grid.innerHTML = '';
 
     for (const sc of scenarios) {
-      const tensor = buildTensor(gridSize, numChannels, sc.dirIndex, sc.overrides);
+      const tensor = buildTensor(gridSize, numChannels, sc.overrides);
       const qValues = runInference(agent, tensor);
       tensor.dispose();
 
@@ -292,7 +262,7 @@ export class ModelInspector {
       canvas.width = gridSize * CELL;
       canvas.height = gridSize * CELL;
       canvas.style.cssText = 'flex-shrink:0;border-radius:3px;';
-      drawGrid(canvas, gridSize, sc.dirIndex, sc.overrides);
+      drawGrid(canvas, gridSize, sc.overrides);
 
       // Q-value bars
       const bars = document.createElement('div');

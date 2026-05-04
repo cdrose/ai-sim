@@ -2,42 +2,33 @@ import { Creature } from './Creature.js';
 import { DQNAgent } from '../ai/DQNAgent.js';
 
 export class Herbivore extends Creature {
-  static agent = new DQNAgent({ gridSize: 13, numChannels: 7, numActions: 5, bufferSize: 20000 });
+  static agent = new DQNAgent({ gridSize: 13, numChannels: 5, numActions: 8, bufferSize: 20000 });
 
   constructor(x, y, world) {
     super(x, y, world);
     this.type = 'herbivore';
-    this.speed = 25;
     this.energyDrain = 2;
+    this.moveDuration = 0.25; // 4 tiles/second
     this.agent = Herbivore.agent;
     this.prevDistToFood = null;
   }
 
   getState() {
-    return this.world.getLocalGrid(this.pos.x, this.pos.y, 13, 7, {
+    return this.world.getLocalGrid(this.tileX, this.tileY, 13, 5, {
       energyFraction: this.energy / this.maxEnergy,
-      headingSin: this.headingSin,
-      headingCos: this.headingCos,
     });
   }
 
-  // Search radius matches the 13×13 grid at tileSize=10: 6 tiles = 60px
-  _getNearestFood(searchRadius = 65) {
-    const tileSize = this.world.tileSize;
-    const cx = Math.floor(this.pos.x / tileSize);
-    const cy = Math.floor(this.pos.y / tileSize);
-    const tr = Math.ceil(searchRadius / tileSize);
-
+  // Returns tile-unit distance to nearest food within searchRadius tiles
+  _getNearestFood(searchRadius = 6) {
     let nearest = null;
     let minDist = Infinity;
-    for (let dx = -tr; dx <= tr; dx++) {
-      for (let dy = -tr; dy <= tr; dy++) {
-        const tile = this.world.getTile(cx + dx, cy + dy);
+    for (let dx = -searchRadius; dx <= searchRadius; dx++) {
+      for (let dy = -searchRadius; dy <= searchRadius; dy++) {
+        const tile = this.world.getTile(this.tileX + dx, this.tileY + dy);
         if (tile && tile.food > 0) {
-          const wx = (cx + dx + 0.5) * tileSize;
-          const wy = (cy + dy + 0.5) * tileSize;
-          const d = Math.hypot(wx - this.pos.x, wy - this.pos.y);
-          if (d < minDist) { minDist = d; nearest = { x: wx, y: wy, dist: d }; }
+          const d = Math.hypot(dx, dy); // tile-unit Euclidean distance
+          if (d < minDist) { minDist = d; nearest = { dist: d }; }
         }
       }
     }
@@ -60,13 +51,13 @@ export class Herbivore extends Creature {
       }
       // No reward or eating when sated — leave food for others
     } else {
-      // Dense approach reward: only meaningful when hungry
+      // Approach reward fires once per tile arrival; delta is in tile units
       if (hungry) {
         const food = this._getNearestFood();
         if (food) {
           if (this.prevDistToFood !== null) {
-            const delta = this.prevDistToFood - food.dist;
-            reward += Math.max(-0.3, Math.min(0.3, delta * 0.04));
+            const delta = this.prevDistToFood - food.dist; // positive = approaching
+            reward += Math.max(-0.5, Math.min(0.5, delta * 0.5));
           }
           this.prevDistToFood = food.dist;
         } else {
@@ -85,8 +76,6 @@ export class Herbivore extends Creature {
 
     if (tile && tile.type === 2) reward -= 0.5;
     if (tile && tile.type === 1) reward -= 0.3;
-
-    if (this.vel.length() > 5) reward += 0.02;
 
     return reward;
   }

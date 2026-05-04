@@ -1,82 +1,115 @@
 import { Vec2 } from '../utils/Vec2.js';
 
-// 8 discrete heading angles in degrees (E=0, increases clockwise in screen coords)
-const DIRS = [0, 45, 90, 135, 180, 225, 270, 315];
-const DEG2RAD = Math.PI / 180;
+// 8 absolute world directions: N, NE, E, SE, S, SW, W, NW
+const DIR_OFFSETS = [[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1]];
 
 export class Creature {
   constructor(x, y, world) {
-    this.pos = new Vec2(x, y);
-    this.vel = new Vec2(0, 0);
-    // Discrete heading: index into DIRS (0=E, 1=SE, 2=S, ...)
-    this.dirIndex = Math.floor(Math.random() * 8);
+    this.world = world;
+    // Logical tile position (integer grid coords)
+    this.tileX = Math.floor(x / world.tileSize);
+    this.tileY = Math.floor(y / world.tileSize);
+    // Pixel position snapped to tile centre for rendering
+    this.pos = new Vec2(
+      (this.tileX + 0.5) * world.tileSize,
+      (this.tileY + 0.5) * world.tileSize
+    );
+    this.targetTileX = this.tileX;
+    this.targetTileY = this.tileY;
+    this._moveDx = 0;
+    this._moveDy = 0;
+    this.isMoving = false;
+    this.moveProgress = 0;
+    this.moveDuration = 0.25; // seconds per tile; overridden by subclass
+    // Unit direction of last/current move — reserved for future momentum reward
+    this.velX = 0;
+    this.velY = 0;
     this.energy = 100;
     this.maxEnergy = 100;
     this.age = 0;
     this.alive = true;
-    this.world = world;
     this.brain = null;
     this.agent = null;
     this.lastState = null;
     this.lastAction = null;
   }
 
-  // Returns sin and cos of current heading for state encoding
-  get headingSin() { return Math.sin(DIRS[this.dirIndex] * DEG2RAD); }
-  get headingCos() { return Math.cos(DIRS[this.dirIndex] * DEG2RAD); }
+  // Direction indicator for renderer — angle of last move in radians
+  get facing() { return Math.atan2(this.velY, this.velX); }
 
   getState() {
-    return this.world.getLocalGrid(this.pos.x, this.pos.y, 7, 5, {
+    return this.world.getLocalGrid(this.tileX, this.tileY, 7, 5, {
       energyFraction: this.energy / this.maxEnergy,
-      headingSin: this.headingSin,
-      headingCos: this.headingCos,
     });
   }
 
   applyAction(action) {
-    // Actions relative to current heading:
-    // 0 = straight, 1 = left 45°, 2 = left 90°, 3 = right 45°, 4 = right 90°
-    const turns = [0, -1, -2, 1, 2]; // steps of 45° (negative = CCW = left on screen)
-    this.dirIndex = ((this.dirIndex + turns[action]) % 8 + 8) % 8;
-    const rad = DIRS[this.dirIndex] * DEG2RAD;
-    const speed = this.speed || 25;
-    this.vel = new Vec2(Math.cos(rad), Math.sin(rad)).scale(speed);
+    const [dx, dy] = DIR_OFFSETS[action];
+    const tx = this.tileX + dx;
+    const ty = this.tileY + dy;
+
+    if (tx >= 0 && tx < this.world.gridW && ty >= 0 && ty < this.world.gridH) {
+      this.targetTileX = tx;
+      this.targetTileY = ty;
+      const len = Math.hypot(dx, dy);
+      this.velX = dx / len;
+      this.velY = dy / len;
+      this._moveDx = dx;
+      this._moveDy = dy;
+    } else {
+      // OOB — stay at current tile; still run the move timer to enforce decision cadence
+      this.targetTileX = this.tileX;
+      this.targetTileY = this.tileY;
+      this.velX = 0;
+      this.velY = 0;
+      this._moveDx = 0;
+      this._moveDy = 0;
+    }
+    this.isMoving = true;
+    this.moveProgress = 0;
   }
 
   step(dt) {
-    if (!this.alive) return 0;
+    if (!this.alive) return;
     this.age += dt;
-    const drain = this.energyDrain || 2;
-    this.energy -= dt * drain;
-    if (this.energy <= 0) { this.alive = false; return 0; }
+    this.energy -= dt * (this.energyDrain || 2);
+    if (this.energy <= 0) { this.alive = false; return; }
 
-    this.pos = this.pos.add(this.vel.scale(dt));
+    if (!this.isMoving) return;
 
-    const maxX = this.world.gridW * this.world.tileSize;
-    const maxY = this.world.gridH * this.world.tileSize;
-    this.pos.x = Math.max(0, Math.min(maxX - 1, this.pos.x));
-    this.pos.y = Math.max(0, Math.min(maxY - 1, this.pos.y));
-
-    const atWall = this.pos.x <= 1 || this.pos.y <= 1 ||
-      this.pos.x >= maxX - 2 || this.pos.y >= maxY - 2;
-
-    return atWall ? -0.1 : 0;
+    this.moveProgress += dt / this.moveDuration;
+    if (this.moveProgress >= 1.0) {
+      this.tileX = this.targetTileX;
+      this.tileY = this.targetTileY;
+      const ts = this.world.tileSize;
+      this.pos.x = (this.tileX + 0.5) * ts;
+      this.pos.y = (this.tileY + 0.5) * ts;
+      this.moveProgress = 1.0;
+      this.isMoving = false;
+    } else {
+      const ts = this.world.tileSize;
+      this.pos.x = (this.tileX + this.moveProgress * this._moveDx + 0.5) * ts;
+      this.pos.y = (this.tileY + this.moveProgress * this._moveDy + 0.5) * ts;
+    }
   }
 
   computeReward() { return 0; }
 
   think() {
+    if (this.isMoving) return; // only decide when arrived at a tile
+
     const state = this.getState();
-    const action = this.agent ? this.agent.selectAction(state) : Math.floor(Math.random() * 5);
+    const numActions = (this.agent && this.agent.numActions) || 8;
+    const action = this.agent
+      ? this.agent.selectAction(state)
+      : Math.floor(Math.random() * numActions);
 
     if (this.lastState !== null && this.agent) {
       const reward = this.computeReward();
       this.agent.remember(this.lastState, this.lastAction, reward, state, false);
     }
 
-    // Dispose old state tensor to prevent memory leak
     if (this.lastState) this.lastState.dispose();
-
     this.lastState = state;
     this.lastAction = action;
     this.applyAction(action);

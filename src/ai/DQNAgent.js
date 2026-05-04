@@ -5,13 +5,13 @@ import { ReplayBuffer } from './ReplayBuffer.js';
 export class DQNAgent {
   constructor(options = {}) {
     this.gridSize = options.gridSize || 7;
-    this.numActions = options.numActions || 5;
+    this.numActions = options.numActions || 8;
     this.gamma = options.gamma || 0.95;
     this.epsilon = options.epsilon || 1.0;
     this.epsilonMin = options.epsilonMin || 0.1;
     this.epsilonDecay = options.epsilonDecay || 0.9995;
     this.batchSize = options.batchSize || 32;
-    this.targetSyncInterval = options.targetSyncInterval || 200;
+    this.targetSyncInterval = options.targetSyncInterval || 500;
     this.brain = new Brain(this.gridSize, this.numActions, options.numChannels || 5);
     this.buffer = new ReplayBuffer(options.bufferSize || 10000);
     this.stepCount = 0;
@@ -96,7 +96,7 @@ export class DQNAgent {
           bufferMax:  this.buffer.maxSize,
           prioritySize: this.buffer.prioritySize,
           batchSize:  batch.length,
-          nPriority:  batch.filter(e => Math.abs(e.reward) >= 1.0).length,
+          nPriority:  batch.filter(e => Math.abs(e.reward) >= 0.05).length,
           rewardMean: mean,
           rewardStd:  std,
           rewardMin:  Math.min(...rewards),

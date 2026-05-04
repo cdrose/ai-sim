@@ -7,7 +7,8 @@ import { Herbivore } from '../creatures/Herbivore.js';
 
 // Builds a minimal world stub. All tile lookups return mutable objects
 // stored in a map so mutations (e.g. tile.food = 0) persist and can be
-// asserted on. tileSize=10, creature at (50,50) → tile (5,5).
+// asserted on. tileSize=10, gridW/H=50.
+// Creature at pixel (55, 55) → tileX=5, tileY=5 (snapped to tile centre).
 function makeWorld({ foodAtCreature = false, predatorNearby = false } = {}) {
   const tileSize = 10;
   const tiles = {};
@@ -31,14 +32,14 @@ function makeWorld({ foodAtCreature = false, predatorNearby = false } = {}) {
     },
     getCreaturesNear(_x, _y, _r) {
       if (!predatorNearby) return [];
-      return [{ type: 'predator', alive: true, pos: { x: 50, y: 50 } }];
+      return [{ type: 'predator', alive: true, pos: { x: 55, y: 55 } }];
     },
     creatures: [],
   };
 }
 
 function makeHerbivore(world, energy = 50) {
-  const h = new Herbivore(50, 50, world);
+  const h = new Herbivore(55, 55, world); // pixel pos → tileX=5, tileY=5
   h.energy = energy;
   h.maxEnergy = 100;
   h.prevDistToFood = null;
@@ -101,12 +102,22 @@ describe('Herbivore.computeReward', () => {
     expect(reward).toBeLessThan(0);
   });
 
-  test('no food and no predator yields near-zero reward', () => {
+  test('approaching food from one tile away gives positive approach reward', () => {
+    const world = makeWorld();
+    // Place food one tile north of creature (tileX=5, tileY=4)
+    world.getTile(5, 4).food = 1;
+    const h = makeHerbivore(world, 50);
+    // Simulate: creature was 2 tiles away last step, now 1 tile away
+    h.prevDistToFood = 2.0; // tile units
+    const reward = h.computeReward();
+    // delta = 2 - 1 = 1 tile; reward += 1 * 0.5 = 0.5
+    expect(reward).toBeGreaterThan(0);
+  });
+
+  test('no food and no predator yields zero reward', () => {
     const world = makeWorld();
     const h = makeHerbivore(world, 50);
     const reward = h.computeReward();
-    // No food to find → no approach reward; no predator penalty;
-    // tiny movement bonus may apply but vel starts at (0,0)
     expect(reward).toBeCloseTo(0, 1);
   });
 });

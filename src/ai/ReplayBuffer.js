@@ -1,6 +1,6 @@
 // Minimum absolute reward for an experience to be added to the priority pool.
-// Eating food yields ~15-30, predator penalty ~-20, approach reward ~0.1-0.5.
-const PRIORITY_THRESHOLD = 1.0;
+// Approach reward is ~0.2-0.5/tile; eating/attack events yield ~1-4 (clipped to 1).
+const PRIORITY_THRESHOLD = 0.05;
 // Priority pool capped at this fraction of the main buffer.
 const PRIORITY_MAX_FRACTION = 0.1;
 
