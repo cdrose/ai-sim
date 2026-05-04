@@ -11,7 +11,7 @@ export class World {
     this.tiles = [];
     this.creatures = [];
     this.foodSources = new Set();
-    this.foodDensity = 0.03;    // fraction of GRASS tiles with food (live-adjustable)
+    this.foodDensity = 0.015;   // fraction of GRASS tiles with food (live-adjustable)
     this.foodRegrowTime = 15;   // seconds before an eaten tile regrows (live-adjustable)
   }
 
@@ -36,7 +36,7 @@ export class World {
       this._placeBlob(TileType.DANGER, 15);
     }
 
-    this._scatterFood();
+    this._scatterFoodClustered();
   }
 
   // Clear existing food sources and re-scatter at current foodDensity.
@@ -48,9 +48,39 @@ export class World {
       if (tile) { tile.food = 0; tile.foodTimer = 0; }
     }
     this.foodSources.clear();
-    this._scatterFood();
+    this._scatterFoodClustered();
   }
 
+  // Scatter food in clusters so there are food-rich zones separated by
+  // sparse areas. Creatures must explore to find new patches rather than
+  // waiting in one spot. Expected total food count matches
+  // foodDensity * grassTileCount regardless of cluster layout.
+  _scatterFoodClustered() {
+    const grassTiles = [];
+    for (let tx = 0; tx < this.gridW; tx++) {
+      for (let ty = 0; ty < this.gridH; ty++) {
+        if (this.tiles[tx][ty].type === TileType.GRASS) grassTiles.push([tx, ty]);
+      }
+    }
+    if (grassTiles.length === 0) return;
+
+    const numClusters = Math.max(5, Math.round(grassTiles.length / 2500));
+    const clusterRadius = Math.max(10, Math.round(Math.min(this.gridW, this.gridH) * 0.10));
+
+    const centers = Array.from({ length: numClusters }, () =>
+      grassTiles[Math.floor(Math.random() * grassTiles.length)]);
+
+    const inCluster = grassTiles.filter(([tx, ty]) =>
+      centers.some(([cx, cy]) => Math.hypot(tx - cx, ty - cy) <= clusterRadius));
+
+    // Scale probability so expected food = foodDensity * grassTiles.length
+    const prob = Math.min(1, this.foodDensity * grassTiles.length / Math.max(1, inCluster.length));
+    for (const [tx, ty] of inCluster) {
+      if (Math.random() < prob) this.addFood(tx, ty);
+    }
+  }
+
+  // Uniform scatter — kept for tests and fallback use.
   _scatterFood() {
     for (let tx = 0; tx < this.gridW; tx++) {
       for (let ty = 0; ty < this.gridH; ty++) {

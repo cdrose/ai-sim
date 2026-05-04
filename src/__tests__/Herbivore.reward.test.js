@@ -42,7 +42,7 @@ function makeHerbivore(world, energy = 50) {
   const h = new Herbivore(55, 55, world); // pixel pos → tileX=5, tileY=5
   h.energy = energy;
   h.maxEnergy = 100;
-  h.prevDistToFood = null;
+  h._targetFood = null;
   return h;
 }
 
@@ -108,9 +108,10 @@ describe('Herbivore.computeReward', () => {
     world.getTile(5, 4).food = 1;
     const h = makeHerbivore(world, 50);
     // Simulate: creature was 2 tiles away last step, now 1 tile away
-    h.prevDistToFood = 2.0; // tile units
+    // Lock target onto that specific tile with previous distance 2.0
+    h._targetFood = { tx: 5, ty: 4, dist: 2.0 };
     const reward = h.computeReward();
-    // delta = 2 - 1 = 1 tile; reward += 1 * 0.5 = 0.5
+    // delta = 2.0 - 1.0 = 1.0 tile; reward += 1.0 * 0.5 = 0.5
     expect(reward).toBeGreaterThan(0);
   });
 

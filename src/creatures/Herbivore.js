@@ -11,7 +11,7 @@ export class Herbivore extends Creature {
     this.energyDrain = 3;
     this.moveDuration = 0.5; // 2 tiles/second
     this.agent = Herbivore.agent;
-    this.prevDistToFood = null;
+    this._targetFood = null; // { tx, ty, dist } — locked-on food tile; switches only when eaten/lost
     this._dbgStep = 0; // throttle for approach-reward logging
   }
 
@@ -21,7 +21,7 @@ export class Herbivore extends Creature {
     });
   }
 
-  // Returns tile-unit distance to nearest food within searchRadius tiles
+  // Returns the nearest food tile within searchRadius as { tx, ty, dist }.
   _getNearestFood(searchRadius = 6) {
     let nearest = null;
     let minDist = Infinity;
@@ -29,8 +29,8 @@ export class Herbivore extends Creature {
       for (let dy = -searchRadius; dy <= searchRadius; dy++) {
         const tile = this.world.getTile(this.tileX + dx, this.tileY + dy);
         if (tile && tile.food > 0) {
-          const d = Math.hypot(dx, dy); // tile-unit Euclidean distance
-          if (d < minDist) { minDist = d; nearest = { dist: d }; }
+          const d = Math.hypot(dx, dy);
+          if (d < minDist) { minDist = d; nearest = { tx: this.tileX + dx, ty: this.tileY + dy, dist: d }; }
         }
       }
     }
@@ -49,44 +49,56 @@ export class Herbivore extends Creature {
         tile.foodTimer = 0;
         this.energy = Math.min(this.maxEnergy, this.energy + 30);
         reward += 2.0 * hungerFactor;
-        this.prevDistToFood = null;
+        this._targetFood = null; // target consumed
         DebugConsole.log('EVENT',
           `HERB ate food  +${(2.0 * hungerFactor).toFixed(2)}  ` +
           `energy:${this.energy.toFixed(0)}  tile:(${this.tileX},${this.tileY})`);
       }
       // No reward or eating when sated — leave food for others
-    } else {
-      // Approach reward fires once per tile arrival; delta is in tile units
-      if (hungry) {
-        const food = this._getNearestFood();
-        if (food) {
-          if (this.prevDistToFood !== null) {
-            const delta = this.prevDistToFood - food.dist; // positive = approaching
-            const approachReward = Math.max(-0.5, Math.min(0.5, delta * 0.5));
-            reward += approachReward;
-            // Log every 50th approach step to confirm signal is firing
-            this._dbgStep++;
-            if (this._dbgStep % 50 === 0) {
-              DebugConsole.log('EVENT',
-                `HERB approach  delta:${delta.toFixed(2)}  reward:${approachReward.toFixed(3)}  ` +
-                `dist:${food.dist.toFixed(1)}  prev:${this.prevDistToFood.toFixed(1)}`);
-            }
-          } else {
-            // First sighting — log so we can confirm food is being found at all
-            this._dbgStep++;
-            if (this._dbgStep % 50 === 0) {
-              DebugConsole.log('EVENT',
-                `HERB food-sight  dist:${food.dist.toFixed(1)}  tile:(${this.tileX},${this.tileY})  prevDist:null`);
-            }
-          }
-          this.prevDistToFood = food.dist;
-        } else {
-          if (this._dbgStep % 200 === 0) {
-            DebugConsole.log('EVENT',
-              `HERB no-food-visible  tile:(${this.tileX},${this.tileY})  energy:${this.energy.toFixed(0)}`);
-          }
+    } else if (hungry) {
+      // Approach reward — locked onto a specific tile for directional consistency.
+      // Only switch target when the current one is eaten or drifts out of range.
+      const searchRadius = 6;
+      if (this._targetFood !== null) {
+        const ttile = this.world.getTile(this._targetFood.tx, this._targetFood.ty);
+        const dx = this._targetFood.tx - this.tileX;
+        const dy = this._targetFood.ty - this.tileY;
+        const currentDist = Math.hypot(dx, dy);
+        const stillValid = ttile && ttile.food > 0 && currentDist <= searchRadius;
+
+        if (stillValid) {
+          const prevDist = this._targetFood.dist;
+          const delta = prevDist - currentDist; // positive = approaching
+          const approachReward = Math.max(-0.5, Math.min(0.5, delta * 0.5));
+          reward += approachReward;
+          this._targetFood = { tx: this._targetFood.tx, ty: this._targetFood.ty, dist: currentDist };
           this._dbgStep++;
-          this.prevDistToFood = null;
+          if (this._dbgStep % 50 === 0) {
+            DebugConsole.log('EVENT',
+              `HERB approach  delta:${delta.toFixed(2)}  reward:${approachReward.toFixed(3)}  ` +
+              `dist:${currentDist.toFixed(1)}  prev:${prevDist.toFixed(1)}`);
+          }
+        } else {
+          // Previous target gone/out-of-range — re-acquire nearest
+          this._targetFood = this._getNearestFood();
+          this._dbgStep++;
+          if (this._targetFood && this._dbgStep % 50 === 0) {
+            DebugConsole.log('EVENT',
+              `HERB new-target  dist:${this._targetFood.dist.toFixed(1)}  ` +
+              `tile:(${this._targetFood.tx},${this._targetFood.ty})`);
+          }
+        }
+      } else {
+        // No target yet — acquire nearest food
+        this._targetFood = this._getNearestFood();
+        this._dbgStep++;
+        if (this._targetFood && this._dbgStep % 50 === 0) {
+          DebugConsole.log('EVENT',
+            `HERB food-sight  dist:${this._targetFood.dist.toFixed(1)}  tile:(${this.tileX},${this.tileY})`);
+        }
+        if (!this._targetFood && this._dbgStep % 200 === 0) {
+          DebugConsole.log('EVENT',
+            `HERB no-food-visible  tile:(${this.tileX},${this.tileY})  energy:${this.energy.toFixed(0)}`);
         }
       }
     }
