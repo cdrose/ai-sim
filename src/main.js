@@ -77,6 +77,7 @@ function spawnNear(CreatureClass, existing, world, spreadTiles = 40) {
 }
 
 
+let simPaused   = false;
 let stepOnce    = false;
 
 debugConsole.onPauseToggle = (isPaused) => {
